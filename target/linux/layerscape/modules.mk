@@ -33,3 +33,18 @@ define KernelPackage/ppfe/description
 endef
 
 $(eval $(call KernelPackage,ppfe))
+
+define KernelPackage/hwmon-tmp401
+  SUBMENU:=$(HWMON_MENU)
+  TITLE:=TI TMP401 and compatible monitoring support
+  KCONFIG:=CONFIG_SENSORS_TMP401
+  FILES:=$(LINUX_DIR)/drivers/hwmon/tmp401.ko
+  AUTOLOAD:=$(call AutoLoad,60,tmp401)
+  $(call AddDepends/hwmon,+kmod-i2c-core)
+endef
+
+define KernelPackage/hwmon-tmp401/description
+  Kernel module for the Texas Instruments TMP401 and compatible chips.
+endef
+
+$(eval $(call KernelPackage,hwmon-tmp401))

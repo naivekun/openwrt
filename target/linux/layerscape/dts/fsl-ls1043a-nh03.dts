@@ -1,0 +1,211 @@
+/dts-v1/;
+#include "fsl-ls1043a.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "LS1043A NH03 Board";
+	compatible = "fsl,ls1043a-nh03", "fsl,ls1043a";
+
+	aliases {
+		serial0 = &duart0;
+		serial1 = &duart1;
+		serial2 = &duart2;
+		serial3 = &duart3;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+    gpio_keys_polled {
+		compatible = "gpio-keys-polled";
+		poll-interval = <100>;
+
+		reset {
+			label = "reset";
+			linux,code = <0x198>;
+			gpios = <&gpio2 0x0a GPIO_ACTIVE_LOW>;
+		};
+	};
+
+    leds {
+        compatible = "gpio-leds";
+
+        led@1 {
+			gpios = <&gpio1 0x17 GPIO_ACTIVE_LOW>;
+			label = "led_cloun";
+			default-state = "off";
+		};
+
+		led@2 {
+			gpios = <&gpio1 0x18 GPIO_ACTIVE_LOW>;
+			label = "led_run";
+			default-state = "off";
+		};
+
+		led@3 {
+			gpios = <&gpio1 0x0c GPIO_ACTIVE_LOW>; // 0x1b
+			label = "led_wifi1";
+			default-state = "off";
+		};
+
+		led@4 {
+			gpios = <&gpio1 0x1c GPIO_ACTIVE_LOW>;
+			label = "led_wifi2";
+			default-state = "off";
+		};
+
+		led@5 {
+			gpios = <&gpio1 0x0a GPIO_ACTIVE_LOW>; // 0x1d
+			label = "led_4g";
+			default-state = "off";
+		};
+
+		led@6 {
+			gpios = <&gpio1 0x0b GPIO_ACTIVE_LOW>; // 0x1e
+			label = "led_5g";
+			default-state = "off";
+		};
+
+		led@7 {
+			gpios = <&gpio_pca9555 0x1e GPIO_ACTIVE_LOW>; // 0x0a
+			label = "led_4g_db";
+			default-state = "off";
+		};
+
+		led@8 {
+			gpios = <&gpio_pca9555 0x1b GPIO_ACTIVE_LOW>; // 0x0b
+			label = "led_5g_db";
+			default-state = "off";
+		};
+
+		led@9 {
+			gpios = <&gpio_pca9555 0x1d GPIO_ACTIVE_LOW>;
+			label = "led_alarm";
+			default-state = "off";
+		};
+    };
+};
+
+&qspi {
+    status = "okay";
+    num-cs = <1>;
+    bus-num = <0>;
+
+    w25q128@0 {
+        compatible = "Winbond,w25q128fw";
+        #address-cells = <1>;
+		#size-cells = <1>;
+        spi-max-frequency = <50000000>;
+        reg = <0>;
+        spi-rx-bus-width = <4>;
+        spi-tx-bus-width = <4>;
+    };
+};
+
+&esdhc {
+    status = "okay";
+    bus-width = <8>;
+    mmc-hs200-1_8v;
+    sd-uhs-sdr104;
+    sd-uhs-sdr50;
+    sd-uhs-sdr25;
+    sd-uhs-sdr12;
+};
+
+&i2c0 {
+    status = "okay";
+    gpio_pca9555: gpio@20 {
+        compatible = "nxp,pca9555";
+        reg = <0x20>;
+        pinctrl-names = "default";
+        gpio-controller;
+        #gpio-cells = <2>;
+    };
+};
+
+&i2c1 {
+    status = "okay";
+    tmp411@4c {
+        compatible = "ti,tmp411";
+        reg = <0x4c>;
+        shunt-resistor = <1000>;
+    };
+};
+
+&duart0 {
+	status = "okay";
+};
+
+&duart1 {
+	status = "okay";
+};
+
+#include "fsl-ls1043-post.dtsi"
+
+&fman0 {
+    ethernet@e0000 {
+		phy-handle = <&qsgmii_phy1>;
+		phy-connection-type = "qsgmii";
+	};
+
+	ethernet@e2000 {
+		phy-handle = <&qsgmii_phy2>;
+		phy-connection-type = "qsgmii";
+	};
+
+	ethernet@e4000 {
+		phy-handle = <&rgmii_phy1>;
+		phy-connection-type = "rgmii-id";
+	};
+
+	ethernet@e6000 {
+		phy-handle = <&rgmii_phy2>;
+		phy-connection-type = "rgmii-id";
+	};
+
+    ethernet@e8000 {
+		phy-handle = <&qsgmii_phy3>;
+		phy-connection-type = "qsgmii";
+	};
+
+	ethernet@ea000 {
+		phy-handle = <&qsgmii_phy4>;
+		phy-connection-type = "qsgmii";
+	};
+
+    mdio@fc000 {
+        rgmii_phy1: ethernet-phy@0 {
+			reg = <1>;
+			rtl821x,aldps-disable;
+		};
+
+		rgmii_phy2: ethernet-phy@1 {
+			reg = <3>;
+			rtl821x,aldps-disable;
+		};
+    };
+
+    mdio@fd000 {
+        qsgmii_phy1:ethernet-phy@0 {
+            reg = <4>;
+        };
+        qsgmii_phy2:ethernet-phy@1 {
+            reg = <5>;
+        };
+        qsgmii_phy3:ethernet-phy@2 {
+            reg = <6>;
+        };
+        qsgmii_phy4:ethernet-phy@3 {
+            reg = <7>;
+        };
+    };
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};

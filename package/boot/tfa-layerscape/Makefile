@@ -82,6 +82,12 @@ define Trusted-Firmware-A/ls1043a-rdb
   BOOT_MODE:=nor
 endef
 
+define Trusted-Firmware-A/ls1043a-nh03
+  NAME:=NXP LS1043ANH03
+  PLAT:=ls1043ardb
+  BOOT_MODE:=sd
+endef
+
 define Trusted-Firmware-A/ls1043a-rdb-sdboot
   NAME:=NXP LS1043ARDB SD Boot
   PLAT:=ls1043ardb
@@ -150,6 +156,7 @@ TFA_TARGETS := \
   ls1028a-rdb-sdboot \
   ls1043a-rdb \
   ls1043a-rdb-sdboot \
+  ls1043a-nh03 \
   ls1046a-frwy \
   ls1046a-frwy-sdboot \
   ls1046a-rdb \

@@ -30,12 +30,24 @@ define Build/ls-append
 endef
 
 define Build/ls-append-dtb
-	dd if=$(DTS_DIR)/$(1).dtb >> $@
+	dd if=$(KDIR)/image-$(1).dtb >> $@
 endef
 
 define Build/ls-append-kernel
 	mkdir -p $@.tmp && \
 	cp $(IMAGE_KERNEL) $@.tmp/fitImage && \
+	make_ext4fs -J -L kernel -l "$(LS_SD_KERNELPART_SIZE)M" \
+		$(if $(SOURCE_DATE_EPOCH),-T $(SOURCE_DATE_EPOCH)) \
+		"$@.kernel.part" "$@.tmp" && \
+	dd if=$@.kernel.part >> $@ && \
+	rm -rf $@.tmp && \
+	rm -f $@.kernel.part
+endef
+
+define Build/ls-append-kernel-and-dtb
+	mkdir -p $@.tmp && \
+	cp $(KDIR)/Image $@.tmp/Image && \
+	cp $(KDIR)/image-$(1).dtb $@.tmp/$(1).dtb && \
 	make_ext4fs -J -L kernel -l "$(LS_SD_KERNELPART_SIZE)M" \
 		$(if $(SOURCE_DATE_EPOCH),-T $(SOURCE_DATE_EPOCH)) \
 		"$@.kernel.part" "$@.tmp" && \

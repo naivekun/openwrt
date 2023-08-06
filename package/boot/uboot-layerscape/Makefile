@@ -60,6 +60,11 @@ define U-Boot/fsl_ls1043a-rdb
   UBOOT_CONFIG:=ls1043ardb_tfa
 endef
 
+define U-Boot/fsl_ls1043a-nh03
+  NAME:=NXP LS1043ANH03
+  UBOOT_CONFIG:=ls1043anh03_tfa
+endef
+
 define U-Boot/fsl_ls1043a-rdb-sdboot
   NAME:=NXP LS1043ARDB SD Card Boot
   UBOOT_CONFIG:=ls1043ardb_tfa
@@ -141,6 +146,7 @@ UBOOT_TARGETS := \
   fsl_ls1028a-rdb-sdboot \
   fsl_ls1043a-rdb \
   fsl_ls1043a-rdb-sdboot \
+  fsl_ls1043a-nh03 \
   fsl_ls1046a-frwy \
   fsl_ls1046a-frwy-sdboot \
   fsl_ls1046a-rdb \

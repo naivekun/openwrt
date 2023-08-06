@@ -11,6 +11,7 @@ case "$(board_name)" in
 	fsl,ls1021a-twr | \
 	fsl,ls1021a-twr-sdboot | \
 	fsl,ls1043a-rdb | \
+	fsl,ls1043a-nh03 | \
 	fsl,ls1043a-rdb-sdboot | \
 	fsl,ls1046a-rdb | \
 	fsl,ls1046a-rdb-sdboot | \
