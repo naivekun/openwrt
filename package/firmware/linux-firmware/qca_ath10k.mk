@@ -97,6 +97,9 @@ define Package/ath10k-firmware-qca6174/install
 		$(PKG_BUILD_DIR)/ath10k/QCA6174/hw3.0/board-2.bin \
 		$(1)/lib/firmware/ath10k/QCA6174/hw3.0/
 	$(INSTALL_DATA) \
+		$(PKG_BUILD_DIR)/ath10k/QCA6174/hw3.0/board.bin \
+		$(1)/lib/firmware/ath10k/QCA6174/hw3.0/
+	$(INSTALL_DATA) \
 		$(PKG_BUILD_DIR)/ath10k/QCA6174/hw3.0/firmware-6.bin \
 		$(1)/lib/firmware/ath10k/QCA6174/hw3.0/firmware-6.bin
 endef
