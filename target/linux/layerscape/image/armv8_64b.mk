@@ -180,8 +180,11 @@ define Device/fsl_ls1043a-nh03
     trusted-firmware-a-ls1043a-nh03 \
     fmc fmc-eth-config \
     kmod-ahci-qoriq \
-    kmod-ath10k-ct \
-    ath10k-firmware-qca6174
+    kmod-ath10k-ct ath10k-firmware-qca6174 \
+    kmod-leds-gpio kmod-gpio-pca953x kmod-button-hotplug kmod-input-gpio-keys-polled \
+    lm-sensors kmod-hwmon-tmp401 \
+    kmod-phy-marvell \
+    pciutils usbutils
   DEVICE_DTS := fsl-ls1043a-nh03
   DEVICE_DTS_DIR := ../dts
   KERNEL_LOADADDR := 0x81000000

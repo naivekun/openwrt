@@ -1,0 +1,301 @@
+--- a/drivers/net/mdio/fwnode_mdio.c
++++ b/drivers/net/mdio/fwnode_mdio.c
+@@ -41,6 +41,7 @@ int fwnode_mdiobus_phy_device_register(s
+ 				       struct fwnode_handle *child, u32 addr)
+ {
+ 	int rc;
++	int phy_combo_mode;
+ 
+ 	rc = fwnode_irq_get(child, 0);
+ 	/* Don't wait forever if the IRQ provider doesn't become available,
+@@ -66,6 +67,12 @@ int fwnode_mdiobus_phy_device_register(s
+ 	fwnode_property_read_u32(child, "reset-deassert-us",
+ 				 &phy->mdio.reset_deassert_delay);
+ 
++	phy_combo_mode = 2; // 2 - COMBO default mode
++	if (fwnode_property_read_bool(child, "phy-combo-mode")) {
++		fwnode_property_read_u32(child, "phy-combo-mode", &phy_combo_mode);
++	}
++	phy->phy_combo_config_mode = (unsigned char) phy_combo_mode;
++
+ 	/* Associate the fwnode with the device structure so it
+ 	 * can be looked up later
+ 	 */
+--- a/drivers/net/phy/marvell.c
++++ b/drivers/net/phy/marvell.c
+@@ -750,6 +750,40 @@ error:
+ 	return err;
+ }
+ 
++static int m88e1340s_config_aneg(struct phy_device *phydev)
++{
++	int err;
++
++	err = marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++	if (err < 0)
++		goto error;
++
++	/* Configure the copper link first */
++	err = m88e1121_config_aneg(phydev);
++	if (err < 0)
++		goto error;
++
++	/* Do not touch the fiber page if we're in copper->sgmii mode */
++	if (phydev->interface == PHY_INTERFACE_MODE_SGMII)
++		return 0;
++
++	/* Then the fiber link */
++	err = marvell_set_page(phydev, MII_MARVELL_FIBER_PAGE);
++	if (err < 0)
++		goto error;
++
++	err = marvell_config_aneg_fiber(phydev);
++	if (err < 0)
++		goto error;
++
++	return marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++
++error:
++	marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++	return err;
++}
++
++
+ static void marvell_config_led(struct phy_device *phydev)
+ {
+ 	u16 def_config;
+@@ -1124,6 +1158,135 @@ static int marvell_1011gbe_config_init(s
+ 
+ 	return marvell_config_init(phydev);
+ }
++
++#define MII_MARVELL_88E1340S_MODE_COPPER 0
++#define MII_MARVELL_88E1340S_MODE_FIBER 1
++#define MII_MARVELL_88E1340S_MODE_COMBO 2
++
++#define MII_MARVELL_88E1340S_P1_FIBER_AN_1000BASEX 4
++#define MII_MARVELL_88E1340S_P6_MODE_COPPER_REG 0
++#define MII_MARVELL_88E1340S_P6_MODE_FIBER_REG 2
++#define MII_MARVELL_88E1340S_P6_MODE_COMBO_REG 7
++#define MII_MARVELL_88E1340S_P6_GCR 20
++
++static int marvell_soft_reset(struct phy_device *phydev)
++{
++	int ret, val;
++	unsigned int retries;
++
++	val = phy_read(phydev, MII_BMCR);
++	ret = phy_write(phydev, MII_BMCR, val | BMCR_RESET);
++	if (ret < 0)
++		return ret;
++
++	/* Poll until the reset bit clears (50ms per retry == 0.6 sec) */
++	retries = 12;
++
++	do {
++		msleep(50);
++		ret = phy_read(phydev, MII_BMCR);
++		if (ret < 0)
++			return ret;
++	} while (ret & BMCR_RESET && --retries);
++	if (ret & BMCR_RESET)
++		return -ETIMEDOUT;
++
++	msleep(1);
++	return 0;
++}
++
++static int marvell_combo_set(struct phy_device *phydev, u8 phy_mode)
++{
++	int err, val;
++	unsigned char combo_reg;
++
++	printk("Marvell Combo set mode: %u\n", phy_mode);
++	switch(phy_mode) {
++		case MII_MARVELL_88E1340S_MODE_COMBO:
++			combo_reg = MII_MARVELL_88E1340S_P6_MODE_COMBO_REG;
++			break;
++		case MII_MARVELL_88E1340S_MODE_FIBER:
++			combo_reg = MII_MARVELL_88E1340S_P6_MODE_FIBER_REG;
++			break;
++		case MII_MARVELL_88E1340S_MODE_COPPER:
++			combo_reg = MII_MARVELL_88E1340S_P6_MODE_COPPER_REG;
++			break;
++		default:
++			printk("Marvell Combo unknown mode set: %u\n", phy_mode);
++			combo_reg = MII_MARVELL_88E1340S_P6_MODE_COMBO_REG;
++	}
++
++	// switch to page 6
++	err = marvell_set_page(phydev, MII_MARVELL_MISC_TEST_PAGE);
++	if (err < 0)
++		return err;
++
++	// read Genertal Control Register
++	val = phy_read(phydev, MII_MARVELL_88E1340S_P6_GCR);
++	if (val < 0)
++		goto error;
++
++	// configure MODE[2:0] to Auto Media Detect 1000BASE-X mode
++	// toggle reset(bit 15)
++	err = phy_write(phydev, MII_MARVELL_88E1340S_P6_GCR, ((val & 0xFFF8) | (0x8000 | combo_reg)));
++	if (err < 0)
++		goto error;
++
++	if (phy_mode == MII_MARVELL_88E1340S_MODE_COMBO || phy_mode == MII_MARVELL_88E1340S_MODE_FIBER) {
++		// switch to page 1
++		err = marvell_set_page(phydev, MII_MARVELL_FIBER_PAGE);
++		if (err < 0)
++			goto error;
++		msleep(50);
++
++		// reg[6:5] = 2'b11 to enable 1000BASE-X Half-Duplex and 1000BASE-X Full-Duplex
++		err = phy_write(phydev, MII_MARVELL_88E1340S_P1_FIBER_AN_1000BASEX, 0x60);
++		if (err < 0)
++			goto error;
++
++		err = marvell_soft_reset(phydev);
++		if (err < 0)
++			goto error;
++	}
++
++	err = marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++	if (err < 0)
++		return err;
++	err = marvell_soft_reset(phydev);
++	if (err < 0)
++		return err;
++
++	return err;
++
++error:
++	marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++	return err;
++}
++
++static int marvell_combo_dev_init(struct phy_device *phydev)
++{
++	u8 combo_mode_config;
++	combo_mode_config = phydev->phy_combo_config_mode;
++	phydev->link = 0;
++	phydev->phy_combo_current_mode = combo_mode_config;
++
++	linkmode_set_bit(ETHTOOL_LINK_MODE_FIBRE_BIT, phydev->supported);
++	linkmode_set_bit(ADVERTISED_FIBRE, phydev->advertising);
++
++	return marvell_combo_set(phydev, combo_mode_config);
++}
++
++static int marvell_88e1340s_config_init(struct phy_device *phydev)
++{
++	int err;
++	printk("Marvell 88E1340S init\n");
++	err = marvell_combo_dev_init(phydev);
++	if (err < 0)
++		printk("Marvell 88E1340S combo init failed\n");
++
++	return marvell_of_reg_init(phydev);
++}
++
+ static int m88e1116r_config_init(struct phy_device *phydev)
+ {
+ 	int err;
+@@ -1683,6 +1846,54 @@ error:
+ 	return err;
+ }
+ 
++static int marvell_88e1340s_read_status(struct phy_device *phydev)
++{
++	int err;
++
++	if (phydev->phy_combo_current_mode != phydev->phy_combo_config_mode) {
++		printk("Marvell Combo status updated from %u to %u\n", phydev->phy_combo_current_mode, phydev->phy_combo_config_mode);
++		if (marvell_combo_set(phydev, phydev->phy_combo_config_mode))
++			printk("Marvell Combo mode switch failed\n");
++		else
++			phydev->phy_combo_current_mode = phydev->phy_combo_config_mode;
++	}
++
++	/* Check the fiber mode first */
++	if (linkmode_test_bit(ETHTOOL_LINK_MODE_FIBRE_BIT,
++			      phydev->supported) &&
++	    phydev->interface != PHY_INTERFACE_MODE_SGMII) {
++
++		err = marvell_set_page(phydev, MII_MARVELL_FIBER_PAGE);
++		if (err < 0)
++			goto error;
++
++		err = marvell_read_status_page(phydev, MII_MARVELL_FIBER_PAGE);
++		if (err < 0)
++			goto error;
++
++		/* If the fiber link is up, it is the selected and
++		 * used link. In this case, we need to stay in the
++		 * fiber page. Please to be careful about that, avoid
++		 * to restore Copper page in other functions which
++		 * could break the behaviour for some fiber phy like
++		 * 88E1512.
++		 */
++		if (phydev->link)
++			return 0;
++
++		/* If fiber link is down, check and save copper mode state */
++		err = marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++		if (err < 0)
++			goto error;
++	}
++
++	return marvell_read_status_page(phydev, MII_MARVELL_COPPER_PAGE);
++
++error:
++	marvell_set_page(phydev, MII_MARVELL_COPPER_PAGE);
++	return err;
++}
++
+ /* marvell_suspend
+  *
+  * Some Marvell's phys have two modes: fiber and copper.
+@@ -3304,13 +3515,14 @@ static struct phy_driver marvell_drivers
+ 		.driver_data = DEF_MARVELL_HWMON_OPS(m88e1510_hwmon_ops),
+ 		.probe = marvell_probe,
+ 		/* PHY_GBIT_FEATURES */
+-		.config_init = marvell_1011gbe_config_init,
+-		.config_aneg = m88e1510_config_aneg,
+-		.read_status = marvell_read_status,
++		.features = PHY_GBIT_FIBRE_FEATURES,
++		.config_init = marvell_88e1340s_config_init,
++		.config_aneg = m88e1340s_config_aneg,
++		.read_status = marvell_88e1340s_read_status,
+ 		.config_intr = marvell_config_intr,
+ 		.handle_interrupt = marvell_handle_interrupt,
+-		.resume = genphy_resume,
+-		.suspend = genphy_suspend,
++		.resume = marvell_resume,
++		.suspend = marvell_suspend,
+ 		.read_page = marvell_read_page,
+ 		.write_page = marvell_write_page,
+ 		.get_sset_count = marvell_get_sset_count,
+--- a/drivers/net/phy/phy_device.c
++++ b/drivers/net/phy/phy_device.c
+@@ -628,6 +628,7 @@ struct phy_device *phy_device_create(str
+ 	dev->link = 0;
+ 	dev->port = PORT_TP;
+ 	dev->interface = PHY_INTERFACE_MODE_GMII;
++	dev->phy_combo_config_mode = -1;
+ 
+ 	dev->autoneg = AUTONEG_ENABLE;
+ 
+--- a/include/linux/phy.h
++++ b/include/linux/phy.h
+@@ -702,6 +702,11 @@ struct phy_device {
+ 
+ 	u8 mdix;
+ 	u8 mdix_ctrl;
++	u8 __combo_link_mode; // +1130
++	u8 __combo_link_status; // +1131
++	u8 __combo_link_mode_inqueue; // +1132
++	u8 phy_combo_current_mode; // +1133
++	u8 phy_combo_config_mode;  // +1134
+ 
+ 	void (*phy_link_change)(struct phy_device *phydev, bool up);
+ 	void (*adjust_link)(struct net_device *dev);
