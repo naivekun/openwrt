@@ -1,0 +1,27 @@
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+board=$(board_name)
+
+swap_nic_name() {
+    NIC1="$1"
+    NIC2="$2"
+    ip link set $NIC1       name ${NIC1}swap
+    ip link set $NIC2       name $NIC1
+    ip link set ${NIC1}swap name $NIC2
+}
+
+if [ ! -e /tmp/.fsl_nh03_port_swapped ]; then
+    case "$board" in
+    fsl,ls1043a-nh03)
+        swap_nic_name eth0 eth2
+        swap_nic_name eth1 eth3
+        ;;
+    esac
+    touch /tmp/.fsl_nh03_port_swapped
+fi
+
+board_config_flush
+
+exit 0
